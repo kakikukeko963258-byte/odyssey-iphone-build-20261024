@@ -32,8 +32,20 @@ jobs:
           brew install xcodegen spirv-cross zstd sevenzip
           python -m pip install -r "$RUNNER_TEMP/source/requirements.txt"
           dotnet --list-sdks
+          DOTNET_ROOT="$(python -c 'import os, shutil; print(os.path.dirname(os.path.realpath(shutil.which("dotnet"))))')"
+          test -d "$DOTNET_ROOT/shared/Microsoft.NETCore.App"
+          echo "DOTNET_ROOT=$DOTNET_ROOT" >> "$GITHUB_ENV"
+          echo "DOTNET_ROOT_ARM64=$DOTNET_ROOT" >> "$GITHUB_ENV"
       - name: Run game-free source checks
         run: python "$RUNNER_TEMP/source/tools/check.py"
+      - name: Verify native extraction tool can start
+        run: |
+          dotnet build "$RUNNER_TEMP/source/dm/tools/nx_extract" -c Release -o "$RUNNER_TEMP/extract-preflight" -v quiet -nologo
+          set +e
+          "$RUNNER_TEMP/extract-preflight/nx_extract"
+          result=$?
+          set -e
+          test "$result" = 2
       - name: Download private game inputs
         if: ${{ !inputs.preflight_only }}
         env:
