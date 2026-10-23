@@ -37,13 +37,13 @@ jobs:
       - name: Download private game inputs
         if: ${{ !inputs.preflight_only }}
         env:
-          BASE_URL: ${{ secrets.BASE_URL }}
-          UPDATE_URL: ${{ secrets.UPDATE_URL }}
+          TRANSFER_URL: ${{ secrets.TRANSFER_URL }}
+          TRANSFER_TOKEN: ${{ secrets.TRANSFER_TOKEN }}
           PROD_KEYS: ${{ secrets.PROD_KEYS }}
         run: |
           mkdir -p "$RUNNER_TEMP/game-inputs" "$RUNNER_TEMP/private-inputs" "$RUNNER_TEMP/artifacts"
-          curl --fail --silent --show-error --location --retry 3 "$BASE_URL" -o "$RUNNER_TEMP/private-inputs/base.7z"
-          curl --fail --silent --show-error --location --retry 3 "$UPDATE_URL" -o "$RUNNER_TEMP/game-inputs/update.nsp"
+          curl --fail --silent --show-error --location --retry 3 -H "X-Transfer-Token: $TRANSFER_TOKEN" "$TRANSFER_URL/base.7z" -o "$RUNNER_TEMP/private-inputs/base.7z"
+          curl --fail --silent --show-error --location --retry 3 -H "X-Transfer-Token: $TRANSFER_TOKEN" "$TRANSFER_URL/update.nsp" -o "$RUNNER_TEMP/game-inputs/update.nsp"
           7zz x "$RUNNER_TEMP/private-inputs/base.7z" "-o$RUNNER_TEMP/game-inputs" '*.nsp' '*.xci'
           printf '%s\n' "$PROD_KEYS" > "$RUNNER_TEMP/private-inputs/prod.keys"
           chmod 600 "$RUNNER_TEMP/private-inputs/prod.keys"
@@ -57,6 +57,12 @@ jobs:
             --bundle-id org.nxnative.odyssey \
             --work "$RUNNER_TEMP/odyssey-build" \
             --output "$RUNNER_TEMP/artifacts/SuperMarioOdyssey-iphone-unsigned.ipa"
+      - name: Return private IPA to workstation
+        if: ${{ !inputs.preflight_only }}
+        env:
+          TRANSFER_URL: ${{ secrets.TRANSFER_URL }}
+          TRANSFER_TOKEN: ${{ secrets.TRANSFER_TOKEN }}
+        run: python upload_ipa.py
       - uses: actions/upload-artifact@v4
         if: ${{ !inputs.preflight_only && github.event.repository.private }}
         with:
