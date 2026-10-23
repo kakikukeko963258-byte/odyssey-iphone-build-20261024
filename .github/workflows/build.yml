@@ -1,0 +1,67 @@
+name: Private iPhone IPA build
+on:
+  workflow_dispatch:
+    inputs:
+      preflight_only:
+        description: Run game-free checks before transferring large inputs
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Apple Silicon and Xcode
+        run: |
+          uname -m
+          test "$(uname -m)" = arm64
+          xcodebuild -version
+          df -h "$RUNNER_TEMP"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch pinned upstream source
+        run: |
+          git clone https://github.com/NicholasDominici/super-mario-odyssey-ios.git "$RUNNER_TEMP/source"
+          git -C "$RUNNER_TEMP/source" checkout 5abe9c27ec5467d486a9708f2317b503f15b6e2a
+      - name: Install dependencies
+        run: |
+          brew install xcodegen spirv-cross zstd sevenzip
+          python -m pip install -r "$RUNNER_TEMP/source/requirements.txt"
+          dotnet --list-sdks
+      - name: Run game-free source checks
+        run: python "$RUNNER_TEMP/source/tools/check.py"
+      - name: Download private game inputs
+        if: ${{ !inputs.preflight_only }}
+        env:
+          BASE_URL: ${{ secrets.BASE_URL }}
+          UPDATE_URL: ${{ secrets.UPDATE_URL }}
+          PROD_KEYS: ${{ secrets.PROD_KEYS }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/game-inputs" "$RUNNER_TEMP/private-inputs" "$RUNNER_TEMP/artifacts"
+          curl --fail --silent --show-error --location --retry 3 "$BASE_URL" -o "$RUNNER_TEMP/private-inputs/base.7z"
+          curl --fail --silent --show-error --location --retry 3 "$UPDATE_URL" -o "$RUNNER_TEMP/game-inputs/update.nsp"
+          7zz x "$RUNNER_TEMP/private-inputs/base.7z" "-o$RUNNER_TEMP/game-inputs" '*.nsp' '*.xci'
+          printf '%s\n' "$PROD_KEYS" > "$RUNNER_TEMP/private-inputs/prod.keys"
+          chmod 600 "$RUNNER_TEMP/private-inputs/prod.keys"
+      - name: Build unsigned iPhone IPA
+        if: ${{ !inputs.preflight_only }}
+        run: |
+          python "$RUNNER_TEMP/source/tools/odyssey.py" \
+            --nsp-dir "$RUNNER_TEMP/game-inputs" \
+            --keys "$RUNNER_TEMP/private-inputs/prod.keys" \
+            --preset iphone \
+            --bundle-id org.nxnative.odyssey \
+            --work "$RUNNER_TEMP/odyssey-build" \
+            --output "$RUNNER_TEMP/artifacts/SuperMarioOdyssey-iphone-unsigned.ipa"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !inputs.preflight_only }}
+        with:
+          name: SuperMarioOdyssey-iphone-unsigned
+          path: ${{ runner.temp }}/artifacts/*.ipa
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
