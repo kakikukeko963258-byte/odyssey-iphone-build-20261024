@@ -1,11 +1,11 @@
-name: Private iPhone IPA build
+name: iPhone build checks
 on:
   workflow_dispatch:
     inputs:
       preflight_only:
         description: Run game-free checks before transferring large inputs
         type: boolean
-        default: false
+        default: true
 permissions:
   contents: read
 jobs:
@@ -58,7 +58,7 @@ jobs:
             --work "$RUNNER_TEMP/odyssey-build" \
             --output "$RUNNER_TEMP/artifacts/SuperMarioOdyssey-iphone-unsigned.ipa"
       - uses: actions/upload-artifact@v4
-        if: ${{ !inputs.preflight_only }}
+        if: ${{ !inputs.preflight_only && github.event.repository.private }}
         with:
           name: SuperMarioOdyssey-iphone-unsigned
           path: ${{ runner.temp }}/artifacts/*.ipa
