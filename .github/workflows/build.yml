@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: xcode-27
-    timeout-minutes: 120
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
       - name: Verify Apple Silicon and Xcode
